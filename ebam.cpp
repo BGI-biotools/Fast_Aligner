@@ -91,9 +91,6 @@ mem_aln2ebam (const mem_opt_t *opt, const bntseq_t *bns,
   bam1_core_t * c;
   ebam_t * r;
 
-	if (s->is_low_qual)
-		return 1;
-
   mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0;
 
   if (m_) mtmp = *m_, m = &mtmp;
@@ -402,7 +399,6 @@ ebam_reset (bseq1_t * seqs, int n_seqs)
 	aln_res_set->n = n_seqs;
 	for (i=0; i<n_seqs; ++i) {
 		seqs[i].res = aln_res_set->pool + i;
-		seqs[i].is_low_qual = 0;
 	}
 
 	return 0;
@@ -418,8 +414,6 @@ ebam_set_dump (bseq1_t * seqs, int n_seqs)
 
 	for (i=0; i<n_seqs; ++i) {
 		s = seqs + i;
-		if (s->is_low_qual)
-			continue;
 
 		n = s->res->rds->n;
 		r = s->res->rds->arr;

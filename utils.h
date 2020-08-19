@@ -262,6 +262,9 @@ extern "C" {
   int ckpthread_join (pthread_t pid);
   void send_work_signal (int * signals, int work_signal, int wait_signal, int n_thread);
 
+	void time_segm_accu (struct timeval * total, struct timeval * cur_seg_beg);
+	double timeval2sec (struct timeval * tv);
+
 #ifdef __cplusplus
 }
 #endif

@@ -166,6 +166,21 @@ str_assign2 (str_t * str, const char * s, int32_t l)
 }
 
 int
+str_assign3 (str_t * str, const char * s, char stop_tag)
+{
+	const char * ch;
+	int32_t l;
+
+	for (l=0,ch=s; (*ch!=stop_tag)&&(*ch!='\0'); ++ch,++l)
+		;
+
+	str_resize (str, l);
+	if (l > 0)
+		memcpy (str->s, s, l);
+	str->s[l] = '\0';
+}
+
+int
 str_append (str_t * str, const char * s, int32_t l)
 {
   if (l <= 0)

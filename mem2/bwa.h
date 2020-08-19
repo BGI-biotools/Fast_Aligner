@@ -59,8 +59,7 @@ struct aln_res_s;
 
 typedef struct {
 	//int l_seq, id;
-	int16_t l_seq;
-	int16_t is_low_qual;
+	int32_t l_seq;
 	int32_t id;
 	char *name, *comment, *seq, *qual; //, *sam;
 	struct aln_res_s * res;

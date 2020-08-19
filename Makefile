@@ -1,15 +1,11 @@
-#CC = /opt/local/gcc-8.2/bin/gcc -I /home/chenxi/sd/local/include -L /home/chenxi/sd/local/lib
-#CXX = /opt/local/gcc-8.2/bin/g++ -I /home/chenxi/sd/local/include -L /home/chenxi/sd/local/lib
-CC = gcc
-CXX = g++
+CC = gcc -I /home/chenxi/local/include -L /home/chenxi/local/lib
+CXX = g++ -I /home/chenxi/local/include -L /home/chenxi/local/lib
 
 SWA_FLAGS = -DDEB=0 -DRDT=0 -DMAXI=0 -DNEW=1 -DSORT_PAIRS=0
 MEM_FLAGS = -DPAIRED_END=1 -DMAINY=0 -DSAIS=1
 CPPFLAGS = -DENABLE_PREFETCH $(MEM_FLAGS) $(SWA_FLAGS)
 LIBS = -lhts -lbz2 -llzma -lpthread -lm -lz
 
-#CFLAGS = -static -O2 -std=gnu99 -g -march=native -DBGZF_MT
-#CXXFLAGS = -static -O2 -std=c++0x -g -march=native -fpermissive -DBGZF_MT
 CFLAGS = -O0 -std=gnu99 -g -march=native -DBGZF_MT
 CXXFLAGS = -O0 -std=c++0x -g -march=native -fpermissive -DBGZF_MT
 
@@ -31,8 +27,7 @@ COBJ = utils.o \
 CXXOBJ = main.o \
          ebam.o \
          sam_ext.o \
-         pipe_main.o \
-			 	 mem_main.o \
+         mem2_main.o \
 				 build_main.o \
 				 sort_and_mark.o \
          mem2/bandedSWA.o \

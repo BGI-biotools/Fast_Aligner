@@ -640,5 +640,27 @@ send_work_signal (int * signals, int work_signal, int wait_signal, int n_thread)
       break;
 
     usleep (100);
-  }
+	}
+}
+
+void
+time_segm_accu (struct timeval * total, struct timeval * cur_seg_beg)
+{
+	struct timeval cur_seg_end;
+
+	gettimeofday (&cur_seg_end, NULL);
+
+	total->tv_sec += cur_seg_end.tv_sec - cur_seg_beg->tv_sec;
+	total->tv_usec += cur_seg_end.tv_usec - cur_seg_beg->tv_usec;
+
+	if (total->tv_usec > 1000000) {
+		total->tv_usec -= 1000000;
+		total->tv_sec  += 1;
+	}
+}
+
+double
+timeval2sec (struct timeval * tv)
+{
+	return ((double)tv->tv_sec + (double)tv->tv_usec/1000000);
 }

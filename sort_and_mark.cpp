@@ -92,6 +92,14 @@ erp_mkd_pair_cmp (ebam_t ** a, ebam_t ** b)
 	if (ret == 0)
 		ret = pa->y - pb->y;
 
+	// If tile==-1 && x==-1 && y==-1, 
+	// it is possible that ret == 0.
+	// Then, we compare the read name.
+	if (ret == 0)
+		ret = pa->b.core.l_qname - pb->b.core.l_qname;
+	if (ret == 0)
+		ret = memcmp (pa->b.data, pb->b.data, pa->b.core.l_qname);
+
 	return ret;
 }
 
@@ -117,6 +125,14 @@ erp_mkd_frag_cmp (ebam_t ** a, ebam_t ** b)
 
 	if (ret == 0)
 		ret = pa->y - pb->y;
+
+	// If tile==-1 && x==-1 && y==-1, 
+	// it is possible that ret == 0.
+	// Then, we compare the read name.
+	if (ret == 0)
+		ret = pa->b.core.l_qname - pb->b.core.l_qname;
+	if (ret == 0)
+		ret = memcmp (pa->b.data, pb->b.data, pa->b.core.l_qname);
 
 	return ret;
 }
@@ -642,8 +658,10 @@ ebam_worker (void * data)
 
 				sort_rds = sd->sort_rds[cur_bat_idx][pth_idx];
 				pre_sort_rds = sd->sort_rds[pre_bat_idx][pth_idx];
-				if (sort_rds->n == 0)
+				if (sort_rds->n == 0) {
+					sd->cur_bat_left[pth_idx] = 0;
 					continue;
+				}
 
         // find batch dump range
         batch_end = sd->bin_end - 100;

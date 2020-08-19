@@ -40,10 +40,8 @@ Authors: Vasimuddin Md <vasimuddin.md@intel.com>; Sanchit Misra <sanchit.misra@i
 #include "kvec.h"
 #include <string>
 
-/*
 #include "../var.h"
 #include "../read.h"
-*/
 
 int bwa_verbose = 3;
 char bwa_rg_id[256];
@@ -178,28 +176,33 @@ bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, int
 			fprintf(stderr, "[W::%s] the 2nd file has fewer sequences.\n", __func__);
 			break;
 		}
-
-		/*
-    if (ks2) {
-      if (xrd_filter_low_qual(fastq_filter,
-            ks->name.s, ks->name.l,
-            ks->seq.s, ks->qual.s, ks->seq.l,
-            ks2->seq.s, ks2->qual.s, ks2->seq.l))
-        continue;
-    } else {
-      if (xrd_filter_low_qual(fastq_filter,
-            ks->name.s, ks->name.l,
-            ks->seq.s, ks->qual.s, ks->seq.l,
-            NULL, NULL, -1))
-        continue;
-    }
-		*/
-
+	
 		if (n >= m) {
 			m = m? m<<1 : 256;
 			seqs = (bseq1_t*) realloc(seqs, m * sizeof(bseq1_t));
 		}
 		trim_readno(&ks->name);
+    if (ks2)
+			trim_readno(&ks2->name);
+
+		// mark low qual reads
+		if (need_filt) {
+			if (ks2) { // pair end reads
+        if (xrd_filter_low_qual (fastq_filter,
+              ks->name.s, ks->name.l,
+              ks->seq.s,  ks->qual.s,  ks->seq.l,
+              ks2->seq.s, ks2->qual.s, ks2->seq.l))
+          continue;
+      } else if (xrd_filter_low_qual (fastq_filter,
+            ks->name.s, ks->name.l,
+            ks->seq.s,  ks->qual.s,  ks->seq.l,
+            NULL, NULL, -1)) {
+          continue;
+      }
+    }
+
+		//fprintf (dfp, "%s\t%s\n", ks->name.s, ks2->name.s);
+
 		kseq2bseq1(ks, &seqs[n]);
 		//seqs[n].id = n;
 		//{
@@ -212,7 +215,7 @@ bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, int
 		size += seqs[n++].l_seq;
 
 		if (ks2) {
-			trim_readno(&ks2->name);
+			//trim_readno(&ks2->name);
 			kseq2bseq1(ks2, &seqs[n]);
 			//seqs[n].id = n;
 			size += seqs[n++].l_seq;

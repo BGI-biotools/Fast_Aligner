@@ -49,6 +49,7 @@ extern "C" {
 
 	int str_assign (str_t * str, const char * s);
 	int str_assign2 (str_t * str, const char * s, int32_t l);
+	int str_assign3 (str_t * str, const char * s, char stop_tag);
 
 	int str_append (str_t * str, const char * s, int32_t l);
 

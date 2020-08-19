@@ -51,7 +51,7 @@ extern mp_t(ar) * aln_res_set;
 extern bmp_t(erd) ** raw_reads;
 extern ebam_file_t ** batch_files;
 
-// debug use
-extern samFile * debug_fp;
+// debug
+extern FILE * dfp;
 
 #endif

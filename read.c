@@ -21,7 +21,6 @@
 #include "cigar.h"
 #include "read.h"
 #include "utils.h"
-#include "sample.h"
 #include "xendian.h"
 
 #define INIT_SIZE 128
@@ -175,11 +174,160 @@ read_assign (xread_t * r, const char * name, const char * anno,
 
 /***********************************************************
  *                                                         *
+ *                  Fastq IO Definition                    *
+ *                                                         *
+ ***********************************************************/
+
+static int
+fq_buffer_load (fq_io_t * fq, int is_first_batch)
+{
+	char * ch;
+	char * line;
+	int32_t l;
+	xread_t * s;
+
+	// end of file
+	if (!is_first_batch && fq->n<fq->m)
+		return 1;
+
+	line = fq->buf;
+	fq->idx = fq->n = 0;
+	while (gzgets(fq->fp,line,LINE_MAX)) {
+		s = fq->seqs + fq->n++;
+
+		// read name
+		if ((ch=strrchr(line,'/')) != NULL) {
+			*ch = '\0';
+			str_assign (s->name, line);
+		} else
+			str_assign3 (s->name, line, '\n');
+
+		// read bases
+		assert (gzgets(fq->fp,line,LINE_MAX) != NULL);
+		l = strlen (line);
+		if (line[l-1] == '\n')
+			--l;
+		read_resize (s, l, 0);
+		s->l = l;
+		memcpy (s->bases, line, l);
+		s->bases[l] = '\0';
+
+		// read flag
+		assert (gzgets(fq->fp,line,LINE_MAX) != NULL);
+
+		// read quals
+		assert (gzgets(fq->fp,line,LINE_MAX) != NULL);
+		l = strlen (line);
+		if (line[l-1] == '\n')
+			--l;
+		assert (l == s->l);
+		memcpy (s->quals, line, l);
+		s->quals[l] = '\0';
+
+		if (fq->n >= fq->m)
+			break;
+	}
+
+	if (fq->n == 0) // end of file
+		return 1;
+	else // fq->n > 0
+		return 0;
+}
+
+fq_io_t *
+fq_open (const char * path, const char * mode)
+{
+	int32_t i;
+	fq_io_t * fq;
+
+	fq = (fq_io_t *) ckmalloc (sizeof(fq_io_t));
+
+	fq->n = 0;
+	fq->m = FQ_SEQ_BATCH;
+	fq->seqs = (xread_t *) ckmalloc (FQ_SEQ_BATCH * sizeof(xread_t));
+	for (i=0; i<FQ_SEQ_BATCH; ++i)
+		read_init2 (fq->seqs+i);
+
+	fq->flag = 0;
+	fq->buf = ALLOC_LINE;
+	if (strchr(mode,'r')) {
+		fq->flag |= FQ_IN;
+		fq->fp = ckgzopen (path, "r");
+		if (fq_buffer_load(fq,1) != 0)
+			err_mesg ("'%s' is empty", path);
+	} else {
+		fq->flag |= FQ_OUT;
+		fq->fp = ckgzopen (path, "w");
+	}
+
+	return fq;
+}
+
+xread_t *
+fq_next (fq_io_t * fq)
+{
+	assert (fq->flag & FQ_IN);
+
+	if (fq->idx < fq->n)
+		return fq->seqs + fq->idx++;
+
+	if (fq_buffer_load(fq,0) != 0)
+		return NULL;
+
+	return fq->seqs + fq->idx++;
+}
+
+void
+fq_close (fq_io_t * fq)
+{
+	int32_t i;
+
+	for (i=0; i<fq->m; ++i)
+		read_free2 (fq->seqs+i);
+	free (fq->seqs);
+	free (fq->buf);
+	gzclose (fq->fp);
+	free (fq);
+}
+
+// original qualities, before -33/-64
+// if read quality system follows phred 33 system, return 1; else, return 0
+int
+fq_has_phred33_quals (fq_io_t * fq)
+{
+	int64_t i;
+
+	assert (fq->n > 0);
+	for (i=0; i<fq->n; ++i)
+		if (read_has_phred33_quals(fq->seqs+i))
+			return 1;
+
+	return 0;
+}
+
+// original qualities, before -33/-64
+// if read quality system follows phred 33 system, return 1; else, return 0
+int
+fq_has_phred33_quals2 (const char * fq_file)
+{
+	int ret;
+	fq_io_t * fq;
+
+	fq = fq_open (fq_file, "r");
+	ret = fq_has_phred33_quals (fq);
+	fq_close (fq);
+
+	return ret;
+}
+
+/***********************************************************
+ *                                                         *
  *                 Read Common Functions                   *
  *                                                         *
  ***********************************************************/
 
 // original qualities, before -33/-64
+// if read quality system follows phred 33 system, return 1; else, return 0
 int
 read_has_phred33_quals (xread_t * r)
 {
@@ -187,9 +335,9 @@ read_has_phred33_quals (xread_t * r)
 
   for (i=0; i<r->l; ++i)
     if (r->quals[i] < 64)
-      return 0;
+      return 1;
 
-  return 1;
+  return 0;
 }
 
 int
@@ -232,31 +380,108 @@ read_length_estimate (const char * fastq_file)
 
 // fixed qualities, after -33/-64
 int
-read_is_low_qual (char * quals, int l, int low_qual, int max_num_low_qual)
+read_is_low_qual (char * quals, int l, int low_qual, double max_num_low_qual)
 {
   int i;
-  int num_low_qual;
+  double num_low_qual;
 
-  for (i=num_low_qual=0; i<l; ++i)
-    if (quals[i]<low_qual && ++num_low_qual>=max_num_low_qual)
-      return 1;
+	num_low_qual = 0;
+  for (i=0; i<l; ++i) {
+		if (quals[i] <= low_qual) {
+			num_low_qual += 1;
+			if (num_low_qual >= max_num_low_qual)
+				return 1;
+		}
+	}
 
   return 0;
 }
 
 int
-read_has_too_many_Ns (char * bases, int l, int max_num_Ns)
+read_has_too_many_Ns (char * bases, int l, double max_num_Ns)
 {
   int i;
-  int num_Ns;
+  double num_Ns;
 
-  for (i=num_Ns=0; i<l; ++i)
-    if (bases[i]=='N' && ++num_Ns>=max_num_Ns)
-      return 1;
+	num_Ns = 0;
+  for (i=0; i<l; ++i) {
+		if (bases[i] == 'N') {
+			num_Ns += 1;
+			if (num_Ns >= max_num_Ns)
+				return 1;
+		}
+	}
 
   return 0;
 }
 
+int
+read_adapter_align (char * bases, int l, const char * adapter, int l_adapter,
+		int min_num_match, int max_num_mismatch, float mis_grad, int adapter_edge)
+{
+	int i, j;
+	int mis;
+	int num_match;
+	int mis_tmp;
+	int min_edge5 = l_adapter - 5;
+
+	for (i=0; i<5; ++i) {
+		mis = 0;
+		num_match = 0;
+		mis_tmp = i / mis_grad;
+		for (j=0; j<i+min_edge5; ++j) {
+			if (adapter[l_adapter-i-min_edge5+j] == bases[j]) {
+				if (++num_match >= min_num_match)
+					return 0;
+			} else {
+				num_match = 0;
+				if (++mis > mis_tmp)
+					break;
+			}
+		}
+		if (mis <= mis_tmp)
+			return 0;
+	}
+
+	for (i=0; i<=l-l_adapter; ++i) {
+		mis = 0;
+		num_match = 0;
+		for (j=0; j<l_adapter; ++j) {
+			if (adapter[j] == bases[i+j]) {
+				if (++num_match >= min_num_match)
+					return i;
+			} else {
+				num_match = 0;
+				if (++mis > max_num_mismatch)
+					break;
+			}
+		}
+		if (mis <= max_num_mismatch)
+			return i;
+	}
+
+	for (i=0; i<l_adapter-adapter_edge; ++i) {
+		mis = 0;
+		num_match = 0;
+		mis_tmp = i / mis_grad;
+		for (j=0; j<i+adapter_edge; ++j) {
+			if (adapter[j] == bases[l-i-adapter_edge+j]) {
+				if (++num_match >= min_num_match)
+					return l - i - adapter_edge;
+			} else {
+				num_match = 0;
+				if (++mis > mis_tmp)
+					break;
+			}
+		}
+		if (mis <= mis_tmp)
+			return l - i - adapter_edge;
+	}
+
+	return -1;
+}
+
+/*
 int
 read_adapter_align (char * bases, int l, const char * adapter, int l_adapter, int min_num_match, int max_num_mismatch)
 {
@@ -311,6 +536,7 @@ read_adapter_align (char * bases, int l, const char * adapter, int l_adapter, in
 
   return find;
 }
+*/
 
 HASH_SET_DEF (adapter, str_t);
 
@@ -433,11 +659,10 @@ xrd_filter_init (void)
 
 int
 xrd_filter_set (xrd_filt_t * filter, uint32_t flag, int low_qual,
-    int max_num_low_qual4read1, int max_num_low_qual4read2,
-    int max_num_Ns4read1, int max_num_Ns4read2,
+    double max_num_low_qual4read1, double max_num_low_qual4read2,
+    double max_num_Ns4read1, double max_num_Ns4read2,
     int min_num_match4read1, int min_num_match4read2,
-    int max_num_mismatch4read1, int max_num_mismatch4read2,
-    const char * forw_ad_list, const char * back_ad_list,
+    int max_num_mismatch, const char * forw_ad_list, const char * back_ad_list,
     const char * forw_ad_seq, const char * back_ad_seq)
 {
   filter->flag = flag;
@@ -445,14 +670,17 @@ xrd_filter_set (xrd_filt_t * filter, uint32_t flag, int low_qual,
 
   filter->max_num_low_qual[0] = max_num_low_qual4read1;
   filter->max_num_Ns[0] = max_num_Ns4read1;
-  filter->min_num_match[0] = min_num_match4read1;
-  filter->max_num_mismatch[0] = max_num_mismatch4read1;
 
   if (flag & BIO_FASTQ_AD_LIST) {
     read_adapter_hash_clear (filter->ad_set[0]);
     read_load_adapter_list (forw_ad_list, filter->ad_set[0]);
   } else if (flag & BIO_FASTQ_AD_STR) {
+		filter->adapter_edge = 6;
+  	filter->max_num_mismatch = max_num_mismatch;
+
     str_assign (filter->ad_seq[0], forw_ad_seq);
+  	filter->min_num_match[0] = min_num_match4read1;
+		filter->mis_grad[0] = (filter->ad_seq[0]->l - filter->adapter_edge) / (filter->max_num_mismatch+1);
   }
 
   if (!(flag & BIO_FASTQ_PE))
@@ -460,14 +688,14 @@ xrd_filter_set (xrd_filt_t * filter, uint32_t flag, int low_qual,
 
   filter->max_num_low_qual[1] = max_num_low_qual4read2;
   filter->max_num_Ns[1] = max_num_Ns4read2;
-  filter->min_num_match[1] = min_num_match4read2;
-  filter->max_num_mismatch[1] = max_num_mismatch4read2;
 
   if (flag & BIO_FASTQ_AD_LIST) {
     read_adapter_hash_clear (filter->ad_set[1]);
-    read_load_adapter_list (forw_ad_list, filter->ad_set[1]);
+    read_load_adapter_list (back_ad_list, filter->ad_set[1]);
   } else if (flag & BIO_FASTQ_AD_STR) {
-    str_assign (filter->ad_seq[1], forw_ad_seq);
+    str_assign (filter->ad_seq[1], back_ad_seq);
+  	filter->min_num_match[1] = min_num_match4read2;
+		filter->mis_grad[1] = (filter->ad_seq[1]->l - filter->adapter_edge) / (filter->max_num_mismatch+1);
   }
 
   return 0;
@@ -493,12 +721,16 @@ xrd_filter_low_qual (xrd_filt_t * filter,
 
   if (filter->flag & BIO_FASTQ_AD_STR) {
     if (read_adapter_align(rd1_bases, l1, filter->ad_seq[0]->s, filter->ad_seq[0]->l,
-          filter->min_num_match[0], filter->max_num_mismatch[0]) >= 0)
+          filter->min_num_match[0], filter->max_num_mismatch,
+					filter->mis_grad[0], filter->adapter_edge) >= 0) {
       return 1;
+		}
     if ((filter->flag & BIO_FASTQ_PE)
         && read_adapter_align(rd2_bases, l2, filter->ad_seq[1]->s, filter->ad_seq[1]->l,
-          filter->min_num_match[1], filter->max_num_mismatch[1]) >= 0)
+          filter->min_num_match[1], filter->max_num_mismatch,
+					filter->mis_grad[1], filter->adapter_edge) >= 0) {
       return 1;
+		}
   } else if (filter->flag & BIO_FASTQ_AD_LIST)
     if (read_is_in_adapter_list2(rd_name,l_name,filter->ad_set[0]))
       return 1;
@@ -514,10 +746,9 @@ xrd_filter_free (xrd_filt_t * filter)
   str_free (filter->ad_seq[0]);
   str_free (filter->ad_seq[1]);
 }
-
 /***********************************************************
  *                                                         *
- *                    Read Definition                      *
+ *                  PE Read Definition                     *
  *                                                         *
  ***********************************************************/
 

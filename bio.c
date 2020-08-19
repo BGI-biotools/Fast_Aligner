@@ -445,10 +445,14 @@ int32_t
 read_baseq_sum (char * qual, int32_t l_seq, int32_t offset)
 {
 	int32_t i;
+	int32_t q;
 	int32_t sum;
 
-	for (i=sum=0; i<l_seq; ++i)
-		sum += qual[i] - offset;
+	for (i=sum=0; i<l_seq; ++i) {
+		q = qual[i] - offset;
+		if (q >= 15)
+			sum += q;
+	}
 
 	return sum;
 }

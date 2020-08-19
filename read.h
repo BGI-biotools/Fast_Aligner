@@ -86,6 +86,52 @@ void read_assign (xread_t * r, const char * name, const char * anno,
 
 /***********************************************************
  *                                                         *
+ *                  Fastq IO Functinos                     *
+ *                                                         *
+ ***********************************************************/
+
+#define BIO_FASTQ_PE      1
+#define BIO_FASTQ_AD_STR  2
+#define BIO_FASTQ_AD_LIST 4
+
+#define FQ_SEQ_BATCH 65536
+#define FQ_SEQ_INIT_SIZE 128
+
+#define FQ_IN  1
+#define FQ_OUT 2
+
+struct fq_io_s;
+typedef struct fq_io_s fq_io_t;
+
+struct fq_io_s {
+	xread_t * seqs;
+	int32_t n, m;
+	int32_t idx;
+	uint32_t flag;
+	gzFile fp;
+	char * buf;
+};
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+fq_io_t * fq_open (const char * path, const char * mode);
+
+xread_t * fq_next (fq_io_t * fq);
+
+void fq_close (fq_io_t * fq);
+
+// if read quality system follows phred 33 system, return 1; else, return 0
+int fq_has_phred33_quals (fq_io_t * fq);
+int fq_has_phred33_quals2 (const char * fq_file);
+
+#ifdef __cplusplus
+}
+#endif
+
+/***********************************************************
+ *                                                         *
  *                 Read Common Functions                   *
  *                                                         *
  ***********************************************************/
@@ -101,13 +147,14 @@ int read_has_phred33_quals (xread_t * r);
 // if first 100 reads are the same length, return the size; else, return -1
 int read_length_estimate (const char * fastq_file);
 
-int read_is_low_qual (char * quals, int l, int low_qual, int max_num_low_qual);
-int read_has_too_many_Ns (char * bases, int l, int max_num_Ns);
+int read_is_low_qual (char * quals, int l, int low_qual, double max_num_low_qual);
+int read_has_too_many_Ns (char * bases, int l, double max_num_Ns);
 
 /*
  * if the adatper can be aligned to the read, return the start of alignment(>=0); else, return -1
  */
-int read_adapter_align (char * basess, int l, const char * adapter, int l_adapter, int min_num_match, int max_num_mismatch);
+int read_adapter_align (char * basess, int l, const char * adapter, int l_adapter,
+		int min_num_match, int max_num_mismatch, float mis_grad, int adapter_edge);
 
 struct xh_set_adapter_s;
 typedef struct xh_set_adapter_s adapter_set_t;
@@ -129,26 +176,27 @@ struct xrd_filt_s {
 
   // low qual
   int32_t low_qual;
-  int32_t max_num_low_qual[2];
-  int32_t max_num_Ns[2];
+  double max_num_low_qual[2]; // allow non-integer here, in order to be more precise
+  double max_num_Ns[2]; // allow non-integer here, in order to be more precise
 
   // adapter list
   adapter_set_t * ad_set[2];
 
   // adapter seq
-  int32_t min_num_match[2];
-  int32_t max_num_mismatch[2];
+	float mis_grad[2];
+  int16_t min_num_match[2];
+	int16_t adapter_edge;
+  int16_t max_num_mismatch;
   str_t * ad_seq[2]; // backward adapter sequence
 };
 
 xrd_filt_t * xrd_filter_init (void);
 
 int xrd_filter_set (xrd_filt_t * filter, uint32_t flag, int low_qual,
-    int max_num_low_qual4read1, int max_num_low_qual4read2,
-    int max_num_Ns4read1, int max_num_Ns4read2,
+    double max_num_low_qual4read1, double max_num_low_qual4read2,
+    double max_num_Ns4read1, double max_num_Ns4read2,
     int min_num_match4read1, int min_num_match4read2,
-    int max_num_mismatch4read1, int max_num_mismatch4read2,
-    const char * forw_ad_list, const char * back_ad_list,
+    int max_num_mismatch, const char * forw_ad_list, const char * back_ad_list,
     const char * forw_ad_seq, const char * back_ad_seq);
 
 /*

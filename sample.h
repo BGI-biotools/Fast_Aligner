@@ -23,10 +23,6 @@ typedef struct bio_lib_s bio_lib_t;
 struct bio_spl_s;
 typedef struct bio_spl_s bio_spl_t;
 
-#define BIO_FASTQ_PE      1
-#define BIO_FASTQ_AD_STR  2
-#define BIO_FASTQ_AD_LIST 4
-
 struct bio_fq_s {
   uint64_t flag;
   int32_t rd_len[2];

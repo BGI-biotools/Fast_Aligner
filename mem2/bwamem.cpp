@@ -923,30 +923,6 @@ int mem_kernel1_core(const mem_opt_t *opt,
 	bseq1_t * s1;
 	bseq1_t * s2;
 
-	// mark low qual reads
-	if (need_filt) {
-		if (opt->flag & MEM_F_PE) {
-			for (i=0; i<nseq; i+=2) {
-				s1 = seq_ + i;
-				s2 = s1   + 1;
-				if (xrd_filter_low_qual(fastq_filter,
-							s1->name, strlen(s1->name),
-							s1->seq, s1->qual, s1->l_seq,
-							s2->seq, s2->qual, s2->l_seq))
-					s1->is_low_qual = s2->is_low_qual = 1;
-			}
-		} else {
-			for (i=0; i<nseq; ++i) {
-				s1 = seq_ + i;
-				if (xrd_filter_low_qual(fastq_filter,
-							s1->name, strlen(s1->name),
-							s1->seq, s1->qual, s1->l_seq,
-							NULL, NULL, -1))
-					s1->is_low_qual = 1;
-			}
-		}
-	}
-	
 	uint64_t tim;
 	// tim = __rdtsc();
 	/* convert to 2-bit encoding if we have not done so */
@@ -1268,12 +1244,8 @@ static void worker_sam(void *data, int seqid, int batch_size, int tid)
 #endif
 
 		// calculate score for markdup
-		for (int i=start; i<end; i+=2) {
-			if (w->seqs[i].is_low_qual
-					|| w->seqs[i+1].is_low_qual)
-				continue;
+		for (int i=start; i<end; i+=2)
 			ebam_mkd_score_calc (w->seqs+i, w->seqs+i+1);
-		}
 	}
 	else
 	{
@@ -1287,8 +1259,6 @@ static void worker_sam(void *data, int seqid, int batch_size, int tid)
 						&w->regs[i], 0, 0, tid);
 			free(w->regs[i].a);
 
-			if (w->seqs[i].is_low_qual)
-				continue;
 			ebam_mkd_score_calc (w->seqs+i, NULL);
 		}
 	}
