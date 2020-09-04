@@ -5,6 +5,7 @@ Large developemnt in Next Generation Sequencing (NGS) technology has enabled DNA
 
 ## Requirements
 * htslib 1.9 or greater at [site](https://github.com/samtools/htslib).
+* R and its two packages, ggplot2 and ggpubr.
 
 ## Quick Start Guide
 * Build Fast_Aligner: `make`
