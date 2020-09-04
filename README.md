@@ -83,8 +83,8 @@ This command is designed for calculating substantial statistical data of Fastq f
 ![avatar](fq_qc.example.png)
 
 ## Release
-* **`Version 2.2.0`**
-&ensp;&ensp;&ensp;1. Parameter `-H` and `-R` were added to command `align`. The usage of the two paramters were same as their usage in `bwa mem`.
-&ensp;&ensp;&ensp;2. Read Group IDs were added to all read records to facilitate downstream analyses, for example, GATK HaplotypeCaller.
-&ensp;&ensp;&ensp;3. Basic statistics of filtered reads was added to the results of `fast_aligner align`.
-&ensp;&ensp;&ensp;4. New command `fq_qc` was added for the statistics of **base distribution**, **GC**, and **base quality**.
+* **`Version 2.2.0`**  
+&ensp;&ensp;&ensp; 1. Parameter `-H` and `-R` were added to command `align`. The usage of the two paramters were same as their usage in `bwa mem`.  
+&ensp;&ensp;&ensp; 2. Read Group IDs were added to all read records to facilitate downstream analyses, for example, GATK HaplotypeCaller.  
+&ensp;&ensp;&ensp; 3. Basic statistics of filtered reads was added to the results of `fast_aligner align`.  
+&ensp;&ensp;&ensp; 4. New command `fq_qc` was added for the statistics of **base distribution**, **GC**, and **base quality**.  
